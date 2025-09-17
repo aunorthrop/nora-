@@ -1,12 +1,15 @@
 class NoraNotebook {
     constructor() {
-        this.apiKey = null;
+        this.isActive = false;
         this.isListening = false;
         this.isProcessing = false;
+        this.isSpeaking = false;
         this.notes = [];
+        this.currentConversation = [];
         this.recognition = null;
         this.synthesis = window.speechSynthesis;
         this.noraVoice = null;
+        this.shouldRestartListening = false;
         
         this.init();
     }
@@ -16,20 +19,14 @@ class NoraNotebook {
         this.setupSpeechRecognition();
         this.setupSpeechSynthesis();
         this.setupEventListeners();
-        this.showStatus('Enter your API key to begin');
+        this.loadNotes();
+        this.showStatus('Press the button to start talking with Nora');
     }
     
     setupElements() {
         this.micButton = document.getElementById('micButton');
         this.status = document.getElementById('status');
-        this.apiSetup = document.getElementById('apiSetup');
-        this.apiKeyInput = document.getElementById('apiKey');
-        this.saveKeyButton = document.getElementById('saveKey');
-        this.clearNotesButton = document.getElementById('clearNotes');
-        this.showNotesButton = document.getElementById('showNotes');
-        this.notesModal = document.getElementById('notesModal');
-        this.closeModalButton = document.getElementById('closeModal');
-        this.notesList = document.getElementById('notesList');
+        this.conversationDiv = document.getElementById('conversation');
         this.micText = document.querySelector('.mic-text');
     }
     
@@ -43,18 +40,22 @@ class NoraNotebook {
             return;
         }
         
-        this.recognition.continuous = false;
+        this.recognition.continuous = true;
         this.recognition.interimResults = false;
         this.recognition.lang = 'en-US';
         
         this.recognition.onstart = () => {
             this.isListening = true;
-            this.updateMicButton();
-            this.showStatus('Listening... Speak now');
+            this.updateInterface();
+            if (this.isActive) {
+                this.showStatus('Listening... I can hear you');
+            }
         };
         
         this.recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript.trim();
+            if (!this.isActive) return;
+            
+            const transcript = event.results[event.results.length - 1][0].transcript.trim();
             if (transcript) {
                 this.processUserInput(transcript);
             }
@@ -62,13 +63,20 @@ class NoraNotebook {
         
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            this.showStatus(`Error: ${event.error}. Try again.`);
-            this.stopListening();
+            if (this.isActive) {
+                if (event.error !== 'aborted') {
+                    this.showStatus(`Listening error: ${event.error}. Restarting...`);
+                    setTimeout(() => this.startListening(), 1000);
+                }
+            }
         };
         
         this.recognition.onend = () => {
-            if (this.isListening && !this.isProcessing) {
-                this.stopListening();
+            this.isListening = false;
+            this.updateInterface();
+            
+            if (this.isActive && !this.isProcessing && !this.isSpeaking) {
+                setTimeout(() => this.startListening(), 500);
             }
         };
     }
@@ -76,7 +84,6 @@ class NoraNotebook {
     setupSpeechSynthesis() {
         const setVoice = () => {
             const voices = this.synthesis.getVoices();
-            // Look for a good female voice
             this.noraVoice = voices.find(voice => 
                 voice.name.includes('Female') || 
                 voice.name.includes('Samantha') ||
@@ -85,12 +92,10 @@ class NoraNotebook {
                 (voice.lang.startsWith('en') && voice.name.includes('Google'))
             );
             
-            // Fallback to any English voice
             if (!this.noraVoice) {
                 this.noraVoice = voices.find(voice => voice.lang.startsWith('en'));
             }
             
-            // Last resort - use the first available voice
             if (!this.noraVoice && voices.length > 0) {
                 this.noraVoice = voices[0];
             }
@@ -105,93 +110,71 @@ class NoraNotebook {
     
     setupEventListeners() {
         this.micButton.addEventListener('click', () => {
-            if (!this.apiKey) {
-                this.showStatus('Please enter your OpenAI API key first');
-                return;
-            }
-            
-            if (this.isListening) {
-                this.stopListening();
+            if (this.isActive) {
+                this.stopSession();
             } else {
-                this.startListening();
+                this.startSession();
             }
         });
         
-        this.saveKeyButton.addEventListener('click', () => {
-            const key = this.apiKeyInput.value.trim();
-            if (key) {
-                if (!key.startsWith('sk-')) {
-                    this.showStatus('Please enter a valid OpenAI API key (starts with sk-)');
-                    return;
-                }
-                this.apiKey = key;
-                this.apiSetup.classList.add('hidden');
-                this.showStatus('Ready! Click "Click to Talk" to start');
-            } else {
-                this.showStatus('Please enter your API key');
-            }
-        });
-        
-        this.apiKeyInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.saveKeyButton.click();
-            }
-        });
-        
-        this.clearNotesButton.addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear all notes? This cannot be undone.')) {
-                this.notes = [];
-                this.showStatus('All notes cleared');
-            }
-        });
-        
-        this.showNotesButton.addEventListener('click', () => {
-            this.showNotesModal();
-        });
-        
-        this.closeModalButton.addEventListener('click', () => {
-            this.notesModal.classList.add('hidden');
-        });
-        
-        this.notesModal.addEventListener('click', (e) => {
-            if (e.target === this.notesModal) {
-                this.notesModal.classList.add('hidden');
-            }
+        window.addEventListener('beforeunload', () => {
+            this.stopSession();
         });
     }
     
+    startSession() {
+        this.isActive = true;
+        this.currentConversation = [];
+        this.updateInterface();
+        this.updateConversation();
+        this.showStatus('Starting up... Get ready to talk!');
+        
+        setTimeout(() => {
+            if (this.isActive) {
+                this.startListening();
+            }
+        }, 1000);
+    }
+    
+    stopSession() {
+        this.isActive = false;
+        this.isProcessing = false;
+        this.isSpeaking = false;
+        this.stopListening();
+        this.synthesis.cancel();
+        this.updateInterface();
+        this.showStatus('Session ended. Press to start again.');
+    }
+    
     startListening() {
-        if (this.recognition && !this.isListening && !this.isProcessing) {
+        if (this.recognition && !this.isListening && this.isActive) {
             try {
                 this.recognition.start();
             } catch (error) {
                 console.error('Recognition start error:', error);
-                this.showStatus('Could not start listening. Please try again.');
+                if (this.isActive) {
+                    setTimeout(() => this.startListening(), 1000);
+                }
             }
         }
     }
     
     stopListening() {
-        this.isListening = false;
-        if (this.recognition) {
+        if (this.recognition && this.isListening) {
             this.recognition.stop();
-        }
-        this.updateMicButton();
-        if (!this.isProcessing) {
-            this.showStatus('Ready! Click to talk again');
         }
     }
     
-    updateMicButton() {
+    updateInterface() {
         if (this.isProcessing) {
             this.micButton.className = 'mic-button processing';
-            this.micText.textContent = 'Processing...';
-        } else if (this.isListening) {
-            this.micButton.className = 'mic-button listening';
-            this.micText.textContent = 'Listening';
+            this.micText.textContent = 'Thinking...';
+        } else if (this.isActive) {
+            this.micButton.className = 'mic-button active';
+            this.micText.textContent = 'Press to Stop';
         } else {
             this.micButton.className = 'mic-button';
-            this.micText.textContent = 'Click to Talk';
+            this.micText.textContent = 'Press to Start';
         }
     }
     
@@ -200,34 +183,57 @@ class NoraNotebook {
     }
     
     async processUserInput(input) {
+        if (!this.isActive) return;
+        
         this.isProcessing = true;
-        this.stopListening();
-        this.updateMicButton();
+        this.updateInterface();
         this.showStatus('Getting response from Nora...');
+        
+        this.currentConversation.push({
+            type: 'user',
+            text: input,
+            timestamp: new Date()
+        });
+        this.updateConversation();
         
         try {
             const response = await this.getNoraResponse(input);
             
-            // Save this interaction to notes
-            this.notes.push({
+            if (!this.isActive) return;
+            
+            const note = {
                 timestamp: new Date().toISOString(),
                 input: input,
                 response: response
+            };
+            
+            this.notes.push(note);
+            this.saveNotes();
+            
+            this.currentConversation.push({
+                type: 'nora',
+                text: response,
+                timestamp: new Date()
             });
+            this.updateConversation();
             
             this.showStatus('Nora is responding...');
             await this.speakResponse(response);
             
         } catch (error) {
             console.error('Error:', error);
-            const errorMsg = "I'm having trouble connecting to OpenAI right now. Please check your API key and try again.";
-            this.showStatus('Error - check console for details');
-            await this.speakResponse(errorMsg);
+            if (this.isActive) {
+                const errorMsg = "I'm having trouble connecting right now. Please try again.";
+                this.showStatus('Connection error - continuing...');
+                await this.speakResponse(errorMsg);
+            }
         }
         
         this.isProcessing = false;
-        this.updateMicButton();
-        this.showStatus('Ready! Click to talk again');
+        if (this.isActive) {
+            this.updateInterface();
+            this.showStatus('Listening... I can hear you');
+        }
     }
     
     async getNoraResponse(userInput) {
@@ -236,42 +242,40 @@ class NoraNotebook {
             const sortedNotes = [...this.notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
             
             notesContext = "\n\nPrevious conversation history (most recent first):\n";
-            sortedNotes.slice(0, 10).forEach((note, index) => {
+            sortedNotes.slice(0, 8).forEach((note) => {
                 const date = new Date(note.timestamp).toLocaleDateString();
                 const time = new Date(note.timestamp).toLocaleTimeString();
                 notesContext += `[${date} ${time}] User: "${note.input}"\nNora: "${note.response}"\n\n`;
             });
-            
-            if (this.notes.length > 5) {
-                const topics = this.extractKeyTopics();
-                notesContext += `\nKey topics discussed: ${topics}\n`;
-            }
         }
         
         const messages = [
             {
                 role: "system",
-                content: `You are Nora, a helpful voice-activated notebook assistant with perfect memory. Your personality is warm, friendly, and professional.
+                content: `You are Nora, a helpful voice-activated notebook assistant with perfect memory. This is an open dialogue where you have continuous conversations with the user.
+
+PERSONALITY: Warm, friendly, conversational, and naturally responsive like a good friend who remembers everything.
 
 CORE FUNCTIONS:
-- Remember EVERYTHING the user tells you with perfect recall
-- Make connections between different conversations and topics
-- Help users recall information from previous conversations
-- Notice patterns and provide insights about their notes and thoughts
-- Be conversational and natural in your responses
+- Remember EVERYTHING from all conversations with perfect recall
+- Make connections between different topics and past conversations  
+- Help recall information and notice patterns
+- Be naturally conversational in an ongoing dialogue
+- Respond as if you're having a real-time conversation
 
 RESPONSE GUIDELINES:
-- Keep responses concise and natural for voice interaction (1-3 sentences usually)
-- Reference previous conversations when relevant: "You mentioned that project last week..."
-- Be helpful and proactive in making connections
-- If asked about something not in your notes, say "I don't have any notes about that yet"
-- Speak naturally as if having a real conversation
+- Keep responses conversational and natural (1-2 sentences usually)
+- Reference previous conversations when relevant: "Like you mentioned yesterday about..."
+- Ask follow-up questions to keep the dialogue flowing
+- Be proactive in making connections and insights
+- Speak as if you're really listening and engaged in the moment
+- If asked about something not in your memory, say "I don't recall us talking about that"
 
 MEMORY BEHAVIOR:
-- Always reference previous conversations when they're relevant to the current topic
-- Help users remember details they might have forgotten
-- Connect new information to things they've told you before
-- Notice patterns in their interests, goals, or concerns
+- Always reference relevant past conversations
+- Help connect new information to previous topics
+- Notice patterns in interests, goals, concerns, or mood
+- Remember personal details, preferences, and ongoing situations
 
 ${notesContext}`
             },
@@ -281,17 +285,15 @@ ${notesContext}`
             }
         ];
         
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch('/.netlify/functions/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.apiKey}`
             },
             body: JSON.stringify({
-                model: 'gpt-4o-mini',
                 messages: messages,
-                max_tokens: 200,
-                temperature: 0.7,
+                max_tokens: 150,
+                temperature: 0.8,
                 presence_penalty: 0.3,
                 frequency_penalty: 0.3
             })
@@ -299,92 +301,93 @@ ${notesContext}`
         
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            throw new Error(`API request failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+            throw new Error(`Request failed: ${response.status}`);
         }
         
         const data = await response.json();
-        return data.choices[0].message.content.trim();
-    }
-    
-    extractKeyTopics() {
-        const allText = this.notes.map(note => note.input + " " + note.response).join(" ");
-        const words = allText.toLowerCase().match(/\b\w{4,}\b/g) || [];
-        const frequency = {};
-        const commonWords = ['that', 'this', 'with', 'have', 'they', 'were', 'said', 'from', 'will', 'about', 'your', 'just', 'like', 'know', 'think', 'time', 'good', 'make', 'work', 'also', 'well', 'need', 'want'];
-        
-        words.forEach(word => {
-            if (!commonWords.includes(word)) {
-                frequency[word] = (frequency[word] || 0) + 1;
-            }
-        });
-        
-        return Object.entries(frequency)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 6)
-            .map(([word]) => word)
-            .join(", ");
+        return data.response;
     }
     
     speakResponse(text) {
         return new Promise((resolve) => {
-            // Cancel any ongoing speech
+            if (!this.isActive) {
+                resolve();
+                return;
+            }
+            
+            this.isSpeaking = true;
             this.synthesis.cancel();
             
-            // Wait a moment for the cancel to take effect
             setTimeout(() => {
+                if (!this.isActive) {
+                    resolve();
+                    return;
+                }
+                
                 const utterance = new SpeechSynthesisUtterance(text);
                 
                 if (this.noraVoice) {
                     utterance.voice = this.noraVoice;
                 }
                 
-                utterance.rate = 0.95;
+                utterance.rate = 1.0;
                 utterance.pitch = 1.0;
                 utterance.volume = 0.9;
                 
                 utterance.onend = () => {
+                    this.isSpeaking = false;
                     resolve();
                 };
                 
                 utterance.onerror = (event) => {
                     console.error('Speech synthesis error:', event);
+                    this.isSpeaking = false;
                     resolve();
                 };
                 
                 this.synthesis.speak(utterance);
-            }, 100);
+            }, 200);
         });
     }
     
-    showNotesModal() {
-        this.renderNotes();
-        this.notesModal.classList.remove('hidden');
+    loadNotes() {
+        const savedNotes = localStorage.getItem('nora-notes');
+        if (savedNotes) {
+            try {
+                this.notes = JSON.parse(savedNotes);
+            } catch (error) {
+                console.error('Error loading notes:', error);
+                this.notes = [];
+            }
+        }
     }
     
-    renderNotes() {
-        if (this.notes.length === 0) {
-            this.notesList.innerHTML = '<div class="empty-notes">No notes yet. Start talking to Nora!</div>';
+    saveNotes() {
+        try {
+            localStorage.setItem('nora-notes', JSON.stringify(this.notes));
+        } catch (error) {
+            console.error('Error saving notes:', error);
+        }
+    }
+    
+    updateConversation() {
+        if (this.currentConversation.length === 0) {
+            this.conversationDiv.innerHTML = '<div class="empty-conversation">Your conversation will appear here...</div>';
             return;
         }
         
-        const sortedNotes = [...this.notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        
-        this.notesList.innerHTML = sortedNotes.map(note => {
-            const date = new Date(note.timestamp).toLocaleDateString();
-            const time = new Date(note.timestamp).toLocaleTimeString();
-            
-            return `
-                <div class="note-item">
-                    <div class="note-date">${date} at ${time}</div>
-                    <div class="note-input"><strong>You:</strong> ${note.input}</div>
-                    <div class="note-response"><strong>Nora:</strong> ${note.response}</div>
-                </div>
-            `;
+        this.conversationDiv.innerHTML = this.currentConversation.map(item => {
+            if (item.type === 'user') {
+                return `<div class="conversation-item"><div class="user-text">You: ${item.text}</div></div>`;
+            } else {
+                return `<div class="conversation-item"><div class="nora-text">Nora: ${item.text}</div></div>`;
+            }
         }).join('');
+        
+        this.conversationDiv.scrollTop = this.conversationDiv.scrollHeight;
     }
 }
 
-// Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     new NoraNotebook();
 });
