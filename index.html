@@ -4,48 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nora - Voice Notebook</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Nora</h1>
-            <p>Your Voice Notebook Assistant</p>
+            <p>Voice Notebook Assistant</p>
         </div>
         
         <div class="mic-container">
             <button id="micButton" class="mic-button">
-                <span class="mic-text">Click to Talk</span>
+                <span class="mic-text">Press to Start</span>
             </button>
         </div>
         
-        <div class="status" id="status">Enter your API key to begin</div>
+        <div class="status" id="status">Press the button to start talking with Nora</div>
         
-        <div class="controls">
-            <button id="clearNotes" class="control-btn">Clear All Notes</button>
-            <button id="showNotes" class="control-btn">View Notes</button>
-        </div>
-        
-        <div class="api-setup" id="apiSetup">
-            <div class="api-card">
-                <h3>OpenAI API Configuration</h3>
-                <input type="password" id="apiKey" placeholder="Enter your OpenAI API key (sk-...)">
-                <button id="saveKey">Save & Continue</button>
-                <p>Your API key is stored locally and never shared</p>
-            </div>
-        </div>
-        
-        <div class="notes-modal hidden" id="notesModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Your Notes</h3>
-                    <button id="closeModal" class="close-btn">&times;</button>
-                </div>
-                <div class="notes-list" id="notesList"></div>
-            </div>
+        <div class="conversation" id="conversation">
+            <div class="empty-conversation">Your conversation will appear here...</div>
         </div>
     </div>
-    
+
     <script src="script.js"></script>
 </body>
 </html>
