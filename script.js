@@ -100,7 +100,7 @@ class NoraRealtimeNotebook {
                 console.log('Connected to OpenAI Realtime API');
                 this.isConnected = true;
                 this.updateInterface();
-                this.updateStatus('Connected! Start speaking...');
+                this.updateStatus('Connected! Nora is listening...');
                 this.initializeSession();
             };
             
@@ -255,36 +255,39 @@ ${notesContext}`,
         switch (message.type) {
             case 'session.created':
                 console.log('Session created successfully');
+                this.updateStatus('Nora is ready - start speaking!');
                 break;
                 
             case 'input_audio_buffer.speech_started':
                 console.log('Speech started');
-                this.updateStatus('Listening...');
+                this.updateStatus('Listening to you...');
                 break;
                 
             case 'input_audio_buffer.speech_stopped':
                 console.log('Speech stopped');
-                this.updateStatus('Processing...');
+                this.updateStatus('Nora is thinking...');
                 break;
                 
             case 'conversation.item.input_audio_transcription.completed':
                 console.log('User said:', message.transcript);
-                this.handleUserInput(message.transcript);
+                this.currentUserInput = message.transcript;
+                break;
+                
+            case 'response.audio_transcript.delta':
+                // Accumulate Nora's response text for saving
+                if (!this.currentResponse) this.currentResponse = '';
+                this.currentResponse += message.delta;
                 break;
                 
             case 'response.audio.delta':
                 // Play audio response
                 this.playAudioDelta(message.delta);
-                break;
-                
-            case 'response.text.delta':
-                // Handle text response if needed
-                console.log('Response text:', message.delta);
+                this.updateStatus('Nora is speaking...');
                 break;
                 
             case 'response.done':
-                this.updateStatus('Ready to listen...');
-                // Save the conversation
+                this.updateStatus('Conversation continues - keep talking!');
+                // Save the conversation turn
                 this.saveCurrentNote();
                 break;
                 
@@ -337,6 +340,9 @@ ${notesContext}`,
             this.notes.push(note);
             this.saveNotes();
             
+            console.log('Saved conversation turn:', note);
+            
+            // Reset for next turn
             this.currentUserInput = null;
             this.currentResponse = null;
         }
@@ -367,7 +373,7 @@ ${notesContext}`,
         }
         
         this.updateInterface();
-        this.updateStatus('Disconnected');
+        this.updateStatus('Session ended - click mic to start again');
     }
     
     // Utility functions
