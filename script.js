@@ -20,14 +20,10 @@ class NoraNotebook {
         this.setupSpeechSynthesis();
         this.setupEventListeners();
         this.loadNotes();
-        this.showStatus('Press the button to start talking with Nora');
     }
     
     setupElements() {
         this.micButton = document.getElementById('micButton');
-        this.status = document.getElementById('status');
-        this.conversationDiv = document.getElementById('conversation');
-        this.micText = document.querySelector('.mic-text');
     }
     
     setupSpeechRecognition() {
@@ -47,9 +43,6 @@ class NoraNotebook {
         this.recognition.onstart = () => {
             this.isListening = true;
             this.updateInterface();
-            if (this.isActive) {
-                this.showStatus('Listening... I can hear you');
-            }
         };
         
         this.recognition.onresult = (event) => {
@@ -63,11 +56,8 @@ class NoraNotebook {
         
         this.recognition.onerror = (event) => {
             console.error('Speech recognition error:', event.error);
-            if (this.isActive) {
-                if (event.error !== 'aborted') {
-                    this.showStatus(`Listening error: ${event.error}. Restarting...`);
-                    setTimeout(() => this.startListening(), 1000);
-                }
+            if (this.isActive && event.error !== 'aborted') {
+                setTimeout(() => this.startListening(), 1000);
             }
         };
         
@@ -84,28 +74,36 @@ class NoraNotebook {
     setupSpeechSynthesis() {
         const setVoice = () => {
             const voices = this.synthesis.getVoices();
+            
+            // First try to find a female voice
             this.noraVoice = voices.find(voice => 
-                voice.name.includes('Female') || 
-                voice.name.includes('Samantha') ||
-                voice.name.includes('Victoria') ||
-                voice.name.includes('Zira') ||
-                (voice.lang.startsWith('en') && voice.name.includes('Google'))
+                (voice.name.toLowerCase().includes('female') || 
+                 voice.name.toLowerCase().includes('samantha') ||
+                 voice.name.toLowerCase().includes('victoria') ||
+                 voice.name.toLowerCase().includes('zira') ||
+                 voice.name.toLowerCase().includes('karen') ||
+                 voice.name.toLowerCase().includes('susan')) && 
+                voice.lang.startsWith('en')
             );
             
+            // If no female voice, get any English voice
             if (!this.noraVoice) {
                 this.noraVoice = voices.find(voice => voice.lang.startsWith('en'));
             }
             
+            // Last resort - use default voice
             if (!this.noraVoice && voices.length > 0) {
                 this.noraVoice = voices[0];
             }
+            
+            console.log('Selected voice:', this.noraVoice?.name || 'No voice found');
         };
         
-        if (this.synthesis.getVoices().length > 0) {
-            setVoice();
-        } else {
-            this.synthesis.onvoiceschanged = setVoice;
-        }
+        // Try to set voice immediately
+        setVoice();
+        
+        // Also listen for when voices are loaded
+        this.synthesis.addEventListener('voiceschanged', setVoice);
     }
     
     setupEventListeners() {
@@ -126,14 +124,12 @@ class NoraNotebook {
         this.isActive = true;
         this.currentConversation = [];
         this.updateInterface();
-        this.updateConversation();
-        this.showStatus('Starting up... Get ready to talk!');
         
         setTimeout(() => {
             if (this.isActive) {
                 this.startListening();
             }
-        }, 1000);
+        }, 500);
     }
     
     stopSession() {
@@ -143,7 +139,6 @@ class NoraNotebook {
         this.stopListening();
         this.synthesis.cancel();
         this.updateInterface();
-        this.showStatus('Session ended. Press to start again.');
     }
     
     startListening() {
@@ -168,18 +163,11 @@ class NoraNotebook {
     updateInterface() {
         if (this.isProcessing) {
             this.micButton.className = 'mic-button processing';
-            this.micText.textContent = 'Thinking...';
         } else if (this.isActive) {
             this.micButton.className = 'mic-button active';
-            this.micText.textContent = 'Press to Stop';
         } else {
             this.micButton.className = 'mic-button';
-            this.micText.textContent = 'Press to Start';
         }
-    }
-    
-    showStatus(message) {
-        this.status.textContent = message;
     }
     
     async processUserInput(input) {
@@ -187,14 +175,12 @@ class NoraNotebook {
         
         this.isProcessing = true;
         this.updateInterface();
-        this.showStatus('Getting response from Nora...');
         
         this.currentConversation.push({
             type: 'user',
             text: input,
             timestamp: new Date()
         });
-        this.updateConversation();
         
         try {
             const response = await this.getNoraResponse(input);
@@ -215,16 +201,13 @@ class NoraNotebook {
                 text: response,
                 timestamp: new Date()
             });
-            this.updateConversation();
             
-            this.showStatus('Nora is responding...');
             await this.speakResponse(response);
             
         } catch (error) {
             console.error('Error:', error);
             if (this.isActive) {
                 const errorMsg = "I'm having trouble connecting right now. Please try again.";
-                this.showStatus('Connection error - continuing...');
                 await this.speakResponse(errorMsg);
             }
         }
@@ -232,7 +215,6 @@ class NoraNotebook {
         this.isProcessing = false;
         if (this.isActive) {
             this.updateInterface();
-            this.showStatus('Listening... I can hear you');
         }
     }
     
@@ -346,7 +328,7 @@ ${notesContext}`
                 };
                 
                 this.synthesis.speak(utterance);
-            }, 200);
+                            }, 100);
         });
     }
     
@@ -368,23 +350,6 @@ ${notesContext}`
         } catch (error) {
             console.error('Error saving notes:', error);
         }
-    }
-    
-    updateConversation() {
-        if (this.currentConversation.length === 0) {
-            this.conversationDiv.innerHTML = '<div class="empty-conversation">Your conversation will appear here...</div>';
-            return;
-        }
-        
-        this.conversationDiv.innerHTML = this.currentConversation.map(item => {
-            if (item.type === 'user') {
-                return `<div class="conversation-item"><div class="user-text">You: ${item.text}</div></div>`;
-            } else {
-                return `<div class="conversation-item"><div class="nora-text">Nora: ${item.text}</div></div>`;
-            }
-        }).join('');
-        
-        this.conversationDiv.scrollTop = this.conversationDiv.scrollHeight;
     }
 }
 
