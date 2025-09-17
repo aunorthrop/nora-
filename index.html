@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nora - Voice Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Nora</h1>
+            <p class="subtitle">Your voice companion</p>
+        </div>
+        
+        <div class="chat-container" id="chatContainer">
+            <div class="message assistant-message">
+                <div class="avatar">N</div>
+                <div class="content">Hi! I'm Nora. Press the microphone to start talking with me. I'll remember our conversation until you press it again to end our session.</div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="micButton" class="mic-button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+                    <path d="M12 18.5v3.5"/>
+                    <path d="M8 22h8"/>
+                </svg>
+                <span class="mic-text">Start Conversation</span>
+            </button>
+            
+            <div class="status" id="status">Press microphone to begin</div>
+        </div>
+        
+        <div class="api-setup" id="apiSetup">
+            <input type="password" id="apiKey" placeholder="Enter your OpenAI API key">
+            <button id="saveKey">Save Key</button>
+            <p class="api-info">Your API key is stored locally and never sent to our servers</p>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
