@@ -3,30 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nora - Voice Notes</title>
+    <title>Nora - Voice Notebook</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
+        <div class="header">
+            <h1>Nora</h1>
+            <p>Your Voice Notebook Assistant</p>
+        </div>
+        
         <div class="mic-container">
             <button id="micButton" class="mic-button">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-                    <path d="M12 18.5v3.5"/>
-                    <path d="M8 22h8"/>
-                </svg>
+                <span class="mic-text">Click to Talk</span>
             </button>
         </div>
         
-        <div class="status" id="status">Press to start</div>
+        <div class="status" id="status">Enter your API key to begin</div>
+        
+        <div class="controls">
+            <button id="clearNotes" class="control-btn">Clear All Notes</button>
+            <button id="showNotes" class="control-btn">View Notes</button>
+        </div>
         
         <div class="api-setup" id="apiSetup">
             <div class="api-card">
-                <h3>Enter your OpenAI API key</h3>
-                <input type="password" id="apiKey" placeholder="sk-...">
-                <button id="saveKey">Save</button>
-                <p>Stored locally, never shared</p>
+                <h3>OpenAI API Configuration</h3>
+                <input type="password" id="apiKey" placeholder="Enter your OpenAI API key (sk-...)">
+                <button id="saveKey">Save & Continue</button>
+                <p>Your API key is stored locally and never shared</p>
+            </div>
+        </div>
+        
+        <div class="notes-modal hidden" id="notesModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Your Notes</h3>
+                    <button id="closeModal" class="close-btn">&times;</button>
+                </div>
+                <div class="notes-list" id="notesList"></div>
             </div>
         </div>
     </div>
