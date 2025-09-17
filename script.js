@@ -101,6 +101,9 @@ class NoraNotebook {
         if (savedKey) {
             this.apiKey = savedKey;
             this.apiSetup.classList.add('hidden');
+        } else {
+            // Show API setup if no key is saved
+            this.apiSetup.classList.remove('hidden');
         }
         
         // Load saved notes
@@ -202,32 +205,50 @@ class NoraNotebook {
     }
     
     async getNoraResponse(userInput) {
-        // Create context from all previous notes
+        // Create comprehensive context from all previous notes - recent first
         let notesContext = "";
         if (this.notes.length > 0) {
-            notesContext = "\n\nPrevious notes and conversations:\n";
-            this.notes.forEach(note => {
-                notesContext += `User: ${note.input}\nNora: ${note.response}\n\n`;
+            // Sort by timestamp, most recent first
+            const sortedNotes = [...this.notes].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            notesContext = "\n\nAll previous notes and memories (most recent first):\n";
+            sortedNotes.forEach((note, index) => {
+                const date = new Date(note.timestamp).toLocaleDateString();
+                notesContext += `[${date}] User said: "${note.input}"\nNora remembered: "${note.response}"\n\n`;
             });
+            
+            // Add summary of key topics if there are many notes
+            if (this.notes.length > 10) {
+                const topics = this.extractKeyTopics();
+                notesContext += `\nKey recurring topics in notes: ${topics}\n`;
+            }
         }
         
         const messages = [
             {
                 role: "system",
-                content: `You are Nora, a voice-only notebook assistant. Your ONLY job is to help with notes and memories.
+                content: `You are Nora, a voice-only notebook assistant with perfect memory. Your job is to be the user's second brain.
 
-What you do:
-- Remember things the user tells you
-- Answer questions about things you've remembered
-- Help organize and recall their notes
-- Remind them of things they've mentioned
+CORE FUNCTIONS:
+- Remember EVERYTHING the user tells you with perfect recall
+- Make connections between different things they've mentioned
+- Proactively remind them of related things they've said before  
+- Help them recall specific details from any previous conversation
+- Notice patterns and relationships in their notes
 
-What you DON'T do:
-- General conversation or chit-chat
-- Legal, medical, or financial advice
-- Topics unrelated to their notes/memories
+MEMORY BEHAVIOR:
+- Always reference specific previous conversations when relevant
+- Connect new information to things they've told you before
+- Say things like "You mentioned X last week, this relates to that because..."
+- If they ask about something, search ALL your notes to give complete answers
+- Remember names, dates, projects, goals, ideas - everything with perfect detail
 
-Keep responses brief and focused on their notes. If they ask about something unrelated to their notes, say "I only help with your notes and memories."
+BOUNDARIES:
+- ONLY discuss things from their notes and memories
+- Don't provide general advice, just help with their personal information
+- If asked about something not in your notes, say "I don't have any notes about that yet"
+
+Keep responses conversational but focused on their personal information and memories.
 
 ${notesContext}`
             },
@@ -246,7 +267,7 @@ ${notesContext}`
             body: JSON.stringify({
                 model: 'gpt-4o-mini',
                 messages: messages,
-                max_tokens: 100,
+                max_tokens: 150,
                 temperature: 0.3
             })
         });
@@ -257,6 +278,25 @@ ${notesContext}`
         
         const data = await response.json();
         return data.choices[0].message.content;
+    }
+    
+    extractKeyTopics() {
+        // Simple topic extraction from notes
+        const allText = this.notes.map(note => note.input + " " + note.response).join(" ");
+        const words = allText.toLowerCase().match(/\b\w{4,}\b/g) || [];
+        const frequency = {};
+        
+        words.forEach(word => {
+            if (!['that', 'this', 'with', 'have', 'they', 'were', 'said', 'from', 'will', 'about'].includes(word)) {
+                frequency[word] = (frequency[word] || 0) + 1;
+            }
+        });
+        
+        return Object.entries(frequency)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 8)
+            .map(([word]) => word)
+            .join(", ");
     }
     
     speakResponse(text) {
