@@ -37,7 +37,7 @@ class NoraNotebook {
         }
         
         this.recognition.continuous = true;
-        this.recognition.interimResults = false;
+        this.recognition.interimResults = true;
         this.recognition.lang = 'en-US';
         
         this.recognition.onstart = () => {
@@ -49,8 +49,12 @@ class NoraNotebook {
             if (!this.isActive) return;
             
             const transcript = event.results[event.results.length - 1][0].transcript.trim();
-            if (transcript) {
-                this.processUserInput(transcript);
+            if (transcript && event.results[event.results.length - 1].isFinal) {
+                // User finished speaking, wait 1.5 seconds then process
+                clearTimeout(this.speechTimeout);
+                this.speechTimeout = setTimeout(() => {
+                    this.processUserInput(transcript);
+                }, 1500);
             }
         };
         
@@ -136,6 +140,7 @@ class NoraNotebook {
         this.isActive = false;
         this.isProcessing = false;
         this.isSpeaking = false;
+        clearTimeout(this.speechTimeout);
         this.stopListening();
         this.synthesis.cancel();
         this.updateInterface();
@@ -161,9 +166,7 @@ class NoraNotebook {
     }
     
     updateInterface() {
-        if (this.isProcessing) {
-            this.micButton.className = 'mic-button processing';
-        } else if (this.isActive) {
+        if (this.isActive) {
             this.micButton.className = 'mic-button active';
         } else {
             this.micButton.className = 'mic-button';
@@ -183,7 +186,9 @@ class NoraNotebook {
         });
         
         try {
+            console.log('Sending request to Netlify function...');
             const response = await this.getNoraResponse(input);
+            console.log('Received response:', response);
             
             if (!this.isActive) return;
             
@@ -267,6 +272,7 @@ ${notesContext}`
             }
         ];
         
+        console.log('Making API request with:', { messages });
         const response = await fetch('/.netlify/functions/chat', {
             method: 'POST',
             headers: {
